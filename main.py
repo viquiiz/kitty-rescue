@@ -10,10 +10,10 @@ import constants as c
 from background import Background
 
 pygame.init()
-
-pygame.display.set_caption("Kitty Rescue")
+pygame.mixer.init()
 
 window = pygame.display.set_mode((c.WIDTH, c.HEIGHT))
+rescued_cats = []
 
 def flip(sprites):
         return [pygame.transform.flip(sprite, True, False) for sprite in sprites]
@@ -73,25 +73,51 @@ class Block(Object):
 
 class Cat(pygame.sprite.Sprite):
     def __init__(self, x, y):
+        super().__init__()  # Chama o construtor da classe Sprite
         self.x = x
         self.y = y
         self.width = 48  # Defina conforme necessário
         self.height = 48
         self.sprites = load_sprite_sheets("img", "cats", self.width, self.height, True)
-        spritesheet = random.choice(["idle_right", "idle_left"])
-        self.current_sprite = self.sprites[spritesheet]  # Usa o primeiro frame da animação Idle
+        self.spritesheet = random.choice(["idle_right", "idle_left"])
+        self.current_sprite = self.sprites[self.spritesheet]  # Usa o primeiro frame da animação Idle
         self.frame_index = 0
         self.image = self.current_sprite[self.frame_index]  # Começa com a primeira imagem
         self.animation_speed = 0.1  # Ajuste a velocidade da animação
+        self.rect = self.image.get_rect(topleft=(self.x, self.y))
+        self.rescued = False
+        self.is_jumping = False
+        self.jump_height = 0
+        self.max_jump_height = 100  # Altura máxima do pulo
+        self.fall_speed = 5  # Velocidade de queda do gato
 
     def update(self):
+        if self.rescued:
+            self.jump_animation()
+
         self.frame_index += self.animation_speed
         if self.frame_index >= len(self.current_sprite):
             self.frame_index = 0  
 
         self.image = self.current_sprite[int(self.frame_index)]  
+        self.rect = self.image.get_rect(topleft=(self.x, self.y))
 
-    def draw(self, win, offset_x, offset_y):
+    def jump_animation(self):
+        if 'right' in self.spritesheet:
+            self.current_sprite = self.sprites["jump_right"]
+        else:
+            self.current_sprite = self.sprites["jump_left"]
+
+        # O gato sobe até atingir a altura máxima do pulo
+        if self.jump_height < self.max_jump_height:
+            self.y -= 1  # Movimenta o gato para cima
+            self.jump_height += 3
+        # O gato começa a cair após atingir a altura máxima
+        elif self.jump_height >= self.max_jump_height:  # Certifique-se de que o gato caia até o chão
+            if self.y < 999999:  # Certifique-se de que o gato caia até o chão (ajuste o valor para o chão do seu jogo)
+                self.y += self.fall_speed
+
+    def draw(self, window, offset_x, offset_y):
         window.blit(self.image, (self.x - offset_x, self.y - offset_y))
 
 class Game:
@@ -102,6 +128,7 @@ class Game:
         pygame.time.set_timer(self.timer_event, 1000)  # Evento de temporizador a cada 1 segundo
         self.font = pygame.font.SysFont('Roboto', 30)  # Fonte para o temporizador e pontuação
         self.cats_rescued = 0  # Contagem dos gatos resgatados
+        self.total_cats = 5
 
     def update_timer(self):
         if self.time_left > 0:
@@ -113,17 +140,107 @@ class Game:
         window.blit(timer_text, (10, 10))
 
         # Exibir a pontuação no canto superior direito
-        score_text = self.font.render(f"Pontos: {self.score}", True, (255, 255, 255))
-        window.blit(score_text, (c.WIDTH - 150, 10))
+        score_text = self.font.render(f"Gatos resgatados: {self.cats_rescued}", True, (255, 255, 255))
+        window.blit(score_text, (c.WIDTH - 300, 10))
 
     def handle_cat_collision(self, player, cats):
         # Verifica se o jogador colidiu com algum gato
-        for cat in cats[:]:
+        global rescued_cats
+        for cat in cats:
             if pygame.sprite.collide_mask(player, cat):  # Se houve colisão com o gato
-                self.score += 10  # Aumenta a pontuação por resgatar um gato
-                self.cats_rescued += 1  # Incrementa o número de gatos resgatados
-                cats.remove(cat)  # Remove o gato da lista
+                if cat not in rescued_cats:
+                    cat.rescued = True
+                    rescued_cats.append(cat)
+
+                    if 'right' in cat.spritesheet:
+                        self.current_sprite = cat.sprites["jump_right"]
+                    else:
+                        self.current_sprite = cat.sprites["jump_left"]
+
+                    pygame.mixer.Sound("assets/sound/retro_game_sound_effects_-_all_sounds/SoundStartLevel.wav").play()
+                    cat.jump_animation()
+
+                    self.score += 1  # Aumenta a pontuação por resgatar um gato
+                    self.cats_rescued += 1  # Incrementa o número de gatos resgatados
                 break
+
+    def show_end_screen(self, window, player_dead=False):
+        pygame.mixer.music.stop()
+
+        # Definir as mensagens de vitória e derrota
+        if player_dead:
+            pygame.mixer.music.load("assets\sound\mp3_8bit Action Jingle & Mini Loop\GameOver (Jingle).mp3") 
+            pygame.mixer.music.play(0, 0.0) 
+            background_image = pygame.image.load('assets/img/telas_final/1.png')
+            final_msg_font = pygame.font.SysFont("Open Sans", 30)
+            final_msg_text = final_msg_font.render("Precione ENTER para tentar novamente ou ESC para sair", True, (255, 255, 255))
+            final_msg_text_rect = final_msg_text.get_rect(center=(500, 230))
+            message = ""
+        elif self.cats_rescued == self.total_cats:
+            pygame.mixer.music.load("assets\sound\mp3_8bit Action Jingle & Mini Loop\Stage Clear Long (Jingle).mp3") 
+            pygame.mixer.music.play(0, 0.0) 
+            background_image = pygame.image.load('assets/img/telas_final/3.png')
+            final_msg_font = pygame.font.SysFont("Open Sans", 30)
+            final_msg_text = final_msg_font.render("Precione ENTER para jogar novamente ou ESC para sair", True, (255, 255, 255))
+            final_msg_text_rect = final_msg_text.get_rect(center=(500, 550))
+            message = "Parabéns! Você conseguiu resgatar todos os gatos!"
+        elif self.cats_rescued > 0:
+            pygame.mixer.music.load("assets\sound\mp3_8bit Action Jingle & Mini Loop\Stage Clear Long (Jingle).mp3") 
+            pygame.mixer.music.play(0, 0.0) 
+            background_image = pygame.image.load('assets/img/telas_final/3.png')
+            final_msg_font = pygame.font.SysFont("Open Sans", 30)
+            final_msg_text = final_msg_font.render("Precione ENTER para jogar novamente ou ESC para sair", True, (255, 255, 255))
+            final_msg_text_rect = final_msg_text.get_rect(center=(500, 550))
+            message = f"Você resgatou {self.cats_rescued} gatos! Boa tentativa!"
+        else:
+            pygame.mixer.music.load("assets\sound\mp3_8bit Action Jingle & Mini Loop\GameOver (Jingle).mp3") 
+            pygame.mixer.music.play(0, 0.0) 
+            background_image = pygame.image.load('assets/img/telas_final/2.png')
+            final_msg_font = pygame.font.SysFont("Open Sans", 30)
+            final_msg_text = final_msg_font.render("Precione ENTER para tentar novamente ou ESC para sair", True, (255, 255, 255))
+            final_msg_text_rect = final_msg_text.get_rect(center=(500, 230))
+            message = ""
+
+        background_image = pygame.transform.scale(background_image, (c.WIDTH, c.HEIGHT))
+        window.blit(background_image, (0, 0))
+
+        font = pygame.font.SysFont("Open Sans", 40)
+        text = font.render(message, True, (255, 255, 255))
+
+        text_rect = text.get_rect(center=(500, 450))
+        window.blit(text, text_rect)
+
+        # Exibir a tela
+        pygame.display.update()
+        pygame.time.delay(3000)
+
+        window.blit(final_msg_text, final_msg_text_rect)
+
+        pygame.display.update()
+
+        # Loop para esperar a interação do usuário
+        waiting_for_key = True
+        while waiting_for_key:
+            for event in pygame.event.get():                
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    quit()
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:  # Verifica se o jogador apertou Enter
+                        main(window)  # Reinicia o jogo
+                        waiting_for_key = False
+                    elif event.key == pygame.K_ESCAPE:  # Verifica se o jogador apertou Escape
+                        pygame.quit()
+                        quit()
+
+
+    def check_end_game(self, window):
+        # Verifica se o tempo acabou ou se todos os gatos foram resgatados
+        if self.time_left <= 0 or self.cats_rescued == self.total_cats:
+            self.show_end_screen(window)  # Exibe a tela de fim de jogo
+            return True
+        return False
 
 class Player(pygame.sprite.Sprite):
     COLOR = c.PLAYER_COLOR
@@ -140,12 +257,15 @@ class Player(pygame.sprite.Sprite):
         self.animation_count = 0
         self.fall_count = 0
         self.jump_count = 0
+        self.lives = 3
+        self.is_dead = False    
 
     def jump(self):
         self.y_vel = -self.GRAVITY * 8
         self.animation_count = 0
         self.jump_count += 1
         if self.jump_count == 1:
+            pygame.mixer.Sound("assets/sound/retro_game_sound_effects_-_all_sounds/SoundJumpHah.wav").play()
             self.fall_count = 0
 
     def move(self, dx, dy):
@@ -177,6 +297,7 @@ class Player(pygame.sprite.Sprite):
         self.jump_count = 0
 
     def hit_head(self):
+        pygame.mixer.Sound("assets/sound/retro_game_sound_effects_-_all_sounds/SoundLand2.wav").play()
         self.count = 0
         self.y_vel *= -1
 
@@ -199,11 +320,26 @@ class Player(pygame.sprite.Sprite):
 
     def update(self):
         # self.rect = self.sprite.get_rect(topleft=(self.rect.x, self.rect.y))
-        
+        if self.rect.y > c.HEIGHT + 300:  # Se o jogador ultrapassar a altura da tela
+            self.die(3)
+
         self.rect = pygame.Rect(self.rect.x, self.rect.y, 109, 109)
 
         self.mask = pygame.mask.from_surface(self.sprite)
-    
+
+    def die(self, lives):
+        self.lives -= lives  # Subtrai uma vida
+        if self.lives <= 0:
+            self.is_dead = True  # Marca o jogador como morto
+
+            # Aqui você pode reiniciar o jogo ou executar alguma outra ação
+
+        else:
+            self.x = 800  # Coloque a posição inicial do jogador de volta
+            self.y = 600
+            self.is_dead = False
+            print(f"Você tem {self.lives} vidas restantes.")
+
     def draw(self, win, offset_x, offset_y):
         # PARA VISUALIZAR O RECT DO PERSONAGEM
         # border_color = (255, 0, 0)  # Cor da borda (vermelha, por exemplo)
@@ -281,11 +417,14 @@ def handle_move(player, objects):
 
     handle_vertical_collision(player, objects, player.y_vel)
 
-def main(window):
-    clock = pygame.time.Clock()
-    game = Game()
+def initial_state():
+    pygame.display.set_caption("Kitty Rescue")
+    pygame.mixer.music.load("assets\sound\mp3_8bit Action Jingle & Mini Loop\Invincible (Loop)_BPM155.mp3")
+    pygame.mixer.music.play(-1, 0.0)
 
-    # Carregar todos os tiles e escolher as imagens
+    game = Game()  # Criar uma nova instância do jogo
+    player = Player(800, 600, 50, 50)  # Posição inicial do personagem
+
     tiles_folder = os.path.join("assets", "img", "terrain", "PNG", "Tiles")
     sky_tiles_1, sky_tiles_2, sky_tiles_3, sky_tiles_4 = Background.get_background(tiles_folder)
 
@@ -304,41 +443,177 @@ def main(window):
     ]
 
     ground_path = join("assets", "img", "terrain", "PNG", "Tiles")
-    
-    objects = [
+
+    objects =[
+        # Chão camada -2
+            Block(0, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+
+        # Chão camada -3
+            , Block(0, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+
+        # Chão camada -2
+            , Block(0, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+
         # Chão camada -1
-            Block(0, c.HEIGHT, block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT, block_size, f"{ground_path}/blank.png")
+            , Block(0, c.HEIGHT + block_size, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, c.HEIGHT + block_size, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, c.HEIGHT + block_size, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+
+        # Chão camada 0
+            , Block(0, c.HEIGHT , block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, c.HEIGHT , block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, c.HEIGHT , block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, c.HEIGHT , block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, c.HEIGHT , block_size, f"{ground_path}/blank.png")
 
         # Chão camada 1
             , Block(0, c.HEIGHT - block_size, block_size, f"{ground_path}/tile55.png")
@@ -547,8 +822,27 @@ def main(window):
             , Block(block_size *4, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile63.png")
         ]
 
+
+    # Colocando os gatos de volta nas suas posições iniciais
+    cats = [
+        Cat(600, 520),
+        Cat(450, 50),
+        Cat(2100, 520),
+        Cat(1700, 520),
+        Cat(800, -50)
+    ]
+
+    # Resetando o deslocamento da tela
     offset_x = 0
     offset_y = 0
+
+    return game, player, cats, objects, background, offset_x, offset_y
+
+def main(window):
+    clock = pygame.time.Clock()
+
+    game, player, cats, objects, background, offset_x, offset_y = initial_state()
+
     scroll_area_width = 200
     scroll_area_hight = 300
 
@@ -567,16 +861,22 @@ def main(window):
             
             if event.type == game.timer_event:  # Atualiza o tempo a cada segundo
                 game.update_timer()
+
+        
+        if player.is_dead:
+            game.show_end_screen(window, True)  
                     
         player.loop(c.FPS)
         handle_move(player, objects)
-
-        for cat in cats:
-            cat.update()  # Atualiza a animação de cada gato
-
         game.handle_cat_collision(player, cats)
 
+        for cat in cats:
+            cat.update() 
+
         draw(window, cats, background, player, objects, game, offset_x, offset_y)
+
+        if game.check_end_game(window):  # Se o jogo acabou, exibe a tela de fim de jogo
+            break
 
         if (player.rect.right - offset_x >= c.WIDTH - scroll_area_width and player.x_vel > 0) or (
                 player.rect.left - offset_x <= c.WIDTH - scroll_area_width and player.x_vel < 0):
@@ -588,7 +888,6 @@ def main(window):
 
     pygame.quit()
     quit()
-
 
 if __name__ == "__main__":
     main(window)
