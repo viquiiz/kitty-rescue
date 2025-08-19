@@ -1,18 +1,19 @@
 import os
-import math
 import random
 import pygame
 
 from os import listdir
 from os.path import isfile, join
 
-import constants as c
-from background import Background
-
 pygame.init()
 pygame.mixer.init()
 
-window = pygame.display.set_mode((c.WIDTH, c.HEIGHT))
+WIDTH, HEIGHT = 1000, 800
+FPS = 60
+PLAYER_VEL = 5
+GRAVITY = 1
+
+window = pygame.display.set_mode((WIDTH, HEIGHT))
 rescued_cats = []
 
 def flip(sprites):
@@ -71,6 +72,71 @@ class Block(Object):
         self.image.blit(block, (0,0))
         self.mask = pygame.mask.from_surface(self.image)
 
+class Background:
+    def get_background(tiles_folder):
+        tile_files = [f for f in os.listdir(tiles_folder) if f.endswith('.png')]
+
+        sky_tiles_1 = []
+        sky_tiles_2 = []
+        sky_tiles_3 = []
+        sky_tiles_4 = []
+
+
+        for tile_file in tile_files:
+            image = pygame.image.load(os.path.join(tiles_folder, tile_file))
+            _, _, width, height = image.get_rect()
+
+            if "ceu1" in tile_file:
+                sky_tiles_1.append((image, width, height, tile_file))
+            elif "ceu2" in tile_file:
+                if tile_file == "ceu2.png":
+                    sky_tiles_2.extend([(image, width, height, tile_file)] * 20)  
+                else:
+                    sky_tiles_2.append((image, width, height, tile_file))  
+            elif "ceu3" in tile_file:
+                if tile_file == "ceu3.png":
+                    sky_tiles_3.extend([(image, width, height, tile_file)] * 15)  
+                else:
+                    sky_tiles_3.append((image, width, height, tile_file))
+            elif "ceu4" in tile_file:
+                if tile_file == "ceu4.png":
+                    sky_tiles_4.extend([(image, width, height, tile_file)] * 10)  
+                else:
+                    sky_tiles_4.append((image, width, height, tile_file))
+
+        return sky_tiles_1, sky_tiles_2, sky_tiles_3, sky_tiles_4
+
+    def generate_bg(sky_tiles_1, sky_tiles_2, sky_tiles_3, sky_tiles_4):
+        background = {
+            "sky1": [],
+            "sky2": [],
+            "sky3": [],
+            "sky4": [],
+        }
+        
+        # Adicionar tiles de céu
+        for i in range(WIDTH // sky_tiles_4[0][1] + 1):
+            for j in range(HEIGHT // sky_tiles_4[0][2] + 1):
+                tile = random.choice(sky_tiles_4)  # Escolher um tile aleatório para o céu
+                background["sky4"].append((tile[0], i * tile[1], j * tile[2]))
+
+        for i in range(WIDTH // sky_tiles_3[0][1] + 1):
+            for j in range(HEIGHT // sky_tiles_3[0][2] + 1):
+                tile = random.choice(sky_tiles_3) 
+                background["sky3"].append((tile[0], i * tile[1], (HEIGHT // 4) + j * tile[2]))  # Deslocar no eixo Y para baixo
+
+        for i in range(WIDTH // sky_tiles_2[0][1] + 1):
+            for j in range(HEIGHT // sky_tiles_2[0][2] + 1):
+                tile = random.choice(sky_tiles_2)  
+                background["sky2"].append((tile[0], i * tile[1], (HEIGHT // 4) * 2 + j * tile[2]))  
+
+        for i in range(WIDTH // sky_tiles_1[0][1] + 1):
+            for j in range(HEIGHT // sky_tiles_1[0][2] + 1):
+                tile = random.choice(sky_tiles_1)  
+                background["sky1"].append((tile[0], i * tile[1], (HEIGHT // 4) * 3 + j * tile[2])) 
+
+        return background
+    
 class Cat(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()  # Chama o construtor da classe Sprite
@@ -141,7 +207,7 @@ class Game:
 
         # Exibir a pontuação no canto superior direito
         score_text = self.font.render(f"Gatos resgatados: {self.cats_rescued}", True, (255, 255, 255))
-        window.blit(score_text, (c.WIDTH - 300, 10))
+        window.blit(score_text, (WIDTH - 300, 10))
 
     def handle_cat_collision(self, player, cats):
         # Verifica se o jogador colidiu com algum gato
@@ -201,7 +267,7 @@ class Game:
             final_msg_text_rect = final_msg_text.get_rect(center=(500, 230))
             message = ""
 
-        background_image = pygame.transform.scale(background_image, (c.WIDTH, c.HEIGHT))
+        background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
         window.blit(background_image, (0, 0))
 
         font = pygame.font.SysFont("Open Sans", 40)
@@ -243,8 +309,7 @@ class Game:
         return False
 
 class Player(pygame.sprite.Sprite):
-    COLOR = c.PLAYER_COLOR
-    GRAVITY = c.GRAVITY
+    GRAVITY = GRAVITY
     SPRITES = load_sprite_sheets("img", "main_char", 64, 64, True)
     ANITMATION_DELAY = 5
 
@@ -320,7 +385,7 @@ class Player(pygame.sprite.Sprite):
 
     def update(self):
         # self.rect = self.sprite.get_rect(topleft=(self.rect.x, self.rect.y))
-        if self.rect.y > c.HEIGHT + 300:  # Se o jogador ultrapassar a altura da tela
+        if self.rect.y > HEIGHT + 300:  # Se o jogador ultrapassar a altura da tela
             self.die(3)
 
         self.rect = pygame.Rect(self.rect.x, self.rect.y, 109, 109)
@@ -406,14 +471,14 @@ def handle_move(player, objects):
     keys = pygame.key.get_pressed()
 
     player.x_vel = 0
-    collide_left = collide(player, objects, - c.PLAYER_VEL * 2)
-    collide_right = collide(player, objects, c.PLAYER_VEL * 2)
+    collide_left = collide(player, objects, - PLAYER_VEL * 2)
+    collide_right = collide(player, objects, PLAYER_VEL * 2)
 
     player.x_vel = 0
     if keys[pygame.K_LEFT] and not collide_left: 
-        player.move_left(c.PLAYER_VEL)
+        player.move_left(PLAYER_VEL)
     if keys[pygame.K_RIGHT] and not collide_right: 
-        player.move_right(c.PLAYER_VEL)
+        player.move_right(PLAYER_VEL)
 
     handle_vertical_collision(player, objects, player.y_vel)
 
@@ -446,380 +511,380 @@ def initial_state():
 
     objects =[
         # Chão camada -2
-            Block(0, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            Block(0, HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
 
         # Chão camada -3
-            , Block(0, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT + block_size *3, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT + block_size *3, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT + block_size *3, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT + block_size *3, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT + block_size *3, block_size, f"{ground_path}/blank.png")
 
         # Chão camada -2
-            , Block(0, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT + block_size *2, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT + block_size *2, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT + block_size *2, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT + block_size *2, block_size, f"{ground_path}/blank.png")
 
         # Chão camada -1
-            , Block(0, c.HEIGHT + block_size, block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT + block_size, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT + block_size, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT + block_size, block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT + block_size, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT + block_size, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT + block_size, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT + block_size, block_size, f"{ground_path}/blank.png")
 
         # Chão camada 0
-            , Block(0, c.HEIGHT , block_size, f"{ground_path}/tile75.png")
-            , Block(block_size, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT , block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT , block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT , block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT , block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT , block_size, f"{ground_path}/tile75.png")
+            , Block(block_size, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT , block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT , block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT , block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT , block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT , block_size, f"{ground_path}/blank.png")
 
         # Chão camada 1
-            , Block(0, c.HEIGHT - block_size, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png") 
-            , Block(block_size *3, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *5, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *6, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *7, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *8, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *9, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *10, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *11, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *12, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *13, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *14, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *15, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *16, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *17, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *18, c.HEIGHT - block_size, block_size, f"{ground_path}/tile53.png")
-            , Block(block_size *20, c.HEIGHT - block_size, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size *21, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT - block_size, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT - block_size, block_size, f"{ground_path}/blank.png") 
+            , Block(block_size *3, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *5, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *6, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *7, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *8, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *9, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *10, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *11, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *12, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *13, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *14, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *15, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *16, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *17, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *18, HEIGHT - block_size, block_size, f"{ground_path}/tile53.png")
+            , Block(block_size *20, HEIGHT - block_size, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size *21, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT - block_size, block_size, f"{ground_path}/blank.png")
 
         # Chão camada 2
-            , Block(0, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile55.png")
-            , Block(block_size, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *3, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile39.png")
-            , Block(block_size *5, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile40.png")
-            , Block(block_size *6, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile37.png")
-            , Block(block_size *7, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
-            , Block(block_size *8, c.HEIGHT - block_size *2, block_size, f"{ground_path}/chao_g.png")
-            , Block(block_size *9, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *10, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile29.png")
-            , Block(block_size *11, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile51.png")
-            , Block(block_size *12, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile49.png")
-            , Block(block_size *13, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile95.png")
-            , Block(block_size *14, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile45.png")
-            , Block(block_size *15, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile32.png")
-            , Block(block_size *16, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
-            , Block(block_size *17, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile98.png")
-            , Block(block_size *18, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile30.png")
-            , Block(block_size *20, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size *21, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile45.png")
-            , Block(block_size *22, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile32.png")
-            , Block(block_size *23, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
-            , Block(block_size *24, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile95.png")
-            , Block(block_size *25, c.HEIGHT - block_size *2, block_size, f"{ground_path}/tile91.png")
-            , Block(block_size *26, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *29, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *30, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *31, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *32, c.HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(0, HEIGHT - block_size *2, block_size, f"{ground_path}/tile55.png")
+            , Block(block_size, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *3, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT - block_size *2, block_size, f"{ground_path}/tile39.png")
+            , Block(block_size *5, HEIGHT - block_size *2, block_size, f"{ground_path}/tile40.png")
+            , Block(block_size *6, HEIGHT - block_size *2, block_size, f"{ground_path}/tile37.png")
+            , Block(block_size *7, HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
+            , Block(block_size *8, HEIGHT - block_size *2, block_size, f"{ground_path}/chao_g.png")
+            , Block(block_size *9, HEIGHT - block_size *2, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *10, HEIGHT - block_size *2, block_size, f"{ground_path}/tile29.png")
+            , Block(block_size *11, HEIGHT - block_size *2, block_size, f"{ground_path}/tile51.png")
+            , Block(block_size *12, HEIGHT - block_size *2, block_size, f"{ground_path}/tile49.png")
+            , Block(block_size *13, HEIGHT - block_size *2, block_size, f"{ground_path}/tile95.png")
+            , Block(block_size *14, HEIGHT - block_size *2, block_size, f"{ground_path}/tile45.png")
+            , Block(block_size *15, HEIGHT - block_size *2, block_size, f"{ground_path}/tile32.png")
+            , Block(block_size *16, HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
+            , Block(block_size *17, HEIGHT - block_size *2, block_size, f"{ground_path}/tile98.png")
+            , Block(block_size *18, HEIGHT - block_size *2, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *20, HEIGHT - block_size *2, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size *21, HEIGHT - block_size *2, block_size, f"{ground_path}/tile45.png")
+            , Block(block_size *22, HEIGHT - block_size *2, block_size, f"{ground_path}/tile32.png")
+            , Block(block_size *23, HEIGHT - block_size *2, block_size, f"{ground_path}/tile47.png")
+            , Block(block_size *24, HEIGHT - block_size *2, block_size, f"{ground_path}/tile95.png")
+            , Block(block_size *25, HEIGHT - block_size *2, block_size, f"{ground_path}/tile91.png")
+            , Block(block_size *26, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *29, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *30, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *31, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *32, HEIGHT - block_size *2, block_size, f"{ground_path}/blank.png")
 
         # Chão camada 3
-            , Block(0, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile98.png")
-            , Block(block_size *2, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile32.png")
-            , Block(block_size *3, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *4, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile19.png")
-            , Block(block_size *5, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile16.png")
-            , Block(block_size *6, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile17.png")
-            , Block(block_size *25, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile103.png")
-            , Block(block_size *26, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *27, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *28, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *29, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *30, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *31, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *32, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
-            , Block(block_size *23, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *3, block_size, f"{ground_path}/tile88.png")
+            , Block(0, HEIGHT - block_size *3, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size, HEIGHT - block_size *3, block_size, f"{ground_path}/tile98.png")
+            , Block(block_size *2, HEIGHT - block_size *3, block_size, f"{ground_path}/tile32.png")
+            , Block(block_size *3, HEIGHT - block_size *3, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *4, HEIGHT - block_size *3, block_size, f"{ground_path}/tile19.png")
+            , Block(block_size *5, HEIGHT - block_size *3, block_size, f"{ground_path}/tile16.png")
+            , Block(block_size *6, HEIGHT - block_size *3, block_size, f"{ground_path}/tile17.png")
+            , Block(block_size *25, HEIGHT - block_size *3, block_size, f"{ground_path}/tile103.png")
+            , Block(block_size *26, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *27, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *28, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *29, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *30, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *31, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *32, HEIGHT - block_size *3, block_size, f"{ground_path}/tile104.png")
+            , Block(block_size *23, HEIGHT - block_size *3, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *3, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 4
-            , Block(0, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile103.png")
-            , Block(block_size, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile101.png")
-            , Block(block_size *2, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *3, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile88.png")
+            , Block(0, HEIGHT - block_size *4, block_size, f"{ground_path}/tile103.png")
+            , Block(block_size, HEIGHT - block_size *4, block_size, f"{ground_path}/tile101.png")
+            , Block(block_size *2, HEIGHT - block_size *4, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *3, HEIGHT - block_size *4, block_size, f"{ground_path}/tile88.png")
 
-            , Block(block_size *15, c.HEIGHT - block_size *3.5, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size *16, c.HEIGHT - block_size *3.5, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *15, HEIGHT - block_size *3.5, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size *16, HEIGHT - block_size *3.5, block_size, f"{ground_path}/tile30.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *4, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *23, HEIGHT - block_size *4, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *4, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 5
-            , Block(block_size *2, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *3, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *2, HEIGHT - block_size *5, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *3, HEIGHT - block_size *5, block_size, f"{ground_path}/tile88.png")
 
-            , Block(block_size *18, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size *19, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *20, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *18, HEIGHT - block_size *5, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size *19, HEIGHT - block_size *5, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *20, HEIGHT - block_size *5, block_size, f"{ground_path}/tile30.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *5, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *23, HEIGHT - block_size *5, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *5, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 6
-            , Block(block_size *2, c.HEIGHT - block_size *6, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *3, c.HEIGHT - block_size *6, block_size, f"{ground_path}/tile88.png")
-            , Block(block_size *23, c.HEIGHT - block_size *6, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *6, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *2, HEIGHT - block_size *6, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *3, HEIGHT - block_size *6, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *23, HEIGHT - block_size *6, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *6, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 7
-            , Block(block_size *2, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *3, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile88.png")
-            , Block(block_size *4, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *5, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *2, HEIGHT - block_size *7, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *3, HEIGHT - block_size *7, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *4, HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *5, HEIGHT - block_size *7, block_size, f"{ground_path}/tile30.png")
 
-            , Block(block_size *13, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size *14, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *15, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *16, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *13, HEIGHT - block_size *7, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size *14, HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *15, HEIGHT - block_size *7, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *16, HEIGHT - block_size *7, block_size, f"{ground_path}/tile30.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *7, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *23, HEIGHT - block_size *7, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *7, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 8
-            , Block(0, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile112.png")
-            , Block(block_size, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile10.png")
-            , Block(block_size *2, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile68.png")
-            , Block(block_size *3, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile62.png")
+            , Block(0, HEIGHT - block_size *8, block_size, f"{ground_path}/tile112.png")
+            , Block(block_size, HEIGHT - block_size *8, block_size, f"{ground_path}/tile10.png")
+            , Block(block_size *2, HEIGHT - block_size *8, block_size, f"{ground_path}/tile68.png")
+            , Block(block_size *3, HEIGHT - block_size *8, block_size, f"{ground_path}/tile62.png")
 
-            , Block(block_size *8, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile31.png")
-            , Block(block_size *9, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *10, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *11, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile30.png")
+            , Block(block_size *8, HEIGHT - block_size *8, block_size, f"{ground_path}/tile31.png")
+            , Block(block_size *9, HEIGHT - block_size *8, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *10, HEIGHT - block_size *8, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *11, HEIGHT - block_size *8, block_size, f"{ground_path}/tile30.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size *24, c.HEIGHT - block_size *8, block_size, f"{ground_path}/tile88.png")
+            , Block(block_size *23, HEIGHT - block_size *8, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size *24, HEIGHT - block_size *8, block_size, f"{ground_path}/tile88.png")
 
         # Chão camada 9
-            , Block(0, c.HEIGHT - block_size *9, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size, c.HEIGHT - block_size *9, block_size, f"{ground_path}/tile127.png")
-            , Block(block_size *2, c.HEIGHT - block_size *9, block_size, f"{ground_path}/tile10.png")
+            , Block(0, HEIGHT - block_size *9, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size, HEIGHT - block_size *9, block_size, f"{ground_path}/tile127.png")
+            , Block(block_size *2, HEIGHT - block_size *9, block_size, f"{ground_path}/tile10.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *9, block_size, f"{ground_path}/tile69.png")
-            , Block(block_size *24, c.HEIGHT - block_size *9, block_size, f"{ground_path}/tile63.png")
+            , Block(block_size *23, HEIGHT - block_size *9, block_size, f"{ground_path}/tile69.png")
+            , Block(block_size *24, HEIGHT - block_size *9, block_size, f"{ground_path}/tile63.png")
 
         # Chão camada 10
-            , Block(0, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size, c.HEIGHT - block_size *10, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile127.png")
-            , Block(block_size *3, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
-            , Block(block_size *4, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile111.png")
+            , Block(0, HEIGHT - block_size *10, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size, HEIGHT - block_size *10, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT - block_size *10, block_size, f"{ground_path}/tile127.png")
+            , Block(block_size *3, HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
+            , Block(block_size *4, HEIGHT - block_size *10, block_size, f"{ground_path}/tile111.png")
 
-            , Block(block_size *23, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile2.png")
-            , Block(block_size *24, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile3.png")
-            , Block(block_size *25, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile1111.png")
-            , Block(block_size *26, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
-            , Block(block_size *27, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
-            , Block(block_size *28, c.HEIGHT - block_size *10, block_size, f"{ground_path}/tile111.png")
+            , Block(block_size *23, HEIGHT - block_size *10, block_size, f"{ground_path}/tile2.png")
+            , Block(block_size *24, HEIGHT - block_size *10, block_size, f"{ground_path}/tile3.png")
+            , Block(block_size *25, HEIGHT - block_size *10, block_size, f"{ground_path}/tile1111.png")
+            , Block(block_size *26, HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
+            , Block(block_size *27, HEIGHT - block_size *10, block_size, f"{ground_path}/tile81.png")
+            , Block(block_size *28, HEIGHT - block_size *10, block_size, f"{ground_path}/tile111.png")
         
         # Chão camada 11
-            , Block(0, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *3, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile88.png")
+            , Block(0, HEIGHT - block_size *11, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *3, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT - block_size *11, block_size, f"{ground_path}/tile88.png")
 
-            , Block(block_size *20, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile113.png")
-            , Block(block_size *21, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile81.png")
-            , Block(block_size *22, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile81.png")
-            , Block(block_size *23, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile128.png")
-            , Block(block_size *24, c.HEIGHT - block_size *11, block_size, f"{ground_path}/tile118.png")
-            , Block(block_size *25, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *20, HEIGHT - block_size *11, block_size, f"{ground_path}/tile113.png")
+            , Block(block_size *21, HEIGHT - block_size *11, block_size, f"{ground_path}/tile81.png")
+            , Block(block_size *22, HEIGHT - block_size *11, block_size, f"{ground_path}/tile81.png")
+            , Block(block_size *23, HEIGHT - block_size *11, block_size, f"{ground_path}/tile128.png")
+            , Block(block_size *24, HEIGHT - block_size *11, block_size, f"{ground_path}/tile118.png")
+            , Block(block_size *25, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT - block_size *11, block_size, f"{ground_path}/blank.png")
 
         # Chão camada 12
-            , Block(0, c.HEIGHT - block_size *12, block_size, f"{ground_path}/tile87.png")
-            , Block(block_size, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *2, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *3, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *4, c.HEIGHT - block_size *12, block_size, f"{ground_path}/tile88.png")
+            , Block(0, HEIGHT - block_size *12, block_size, f"{ground_path}/tile87.png")
+            , Block(block_size, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *2, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *3, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *4, HEIGHT - block_size *12, block_size, f"{ground_path}/tile88.png")
 
-            , Block(block_size *20, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *21, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *22, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *23, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *24, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *25, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *26, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *27, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
-            , Block(block_size *28, c.HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *20, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *21, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *22, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *23, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *24, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *25, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *26, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *27, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
+            , Block(block_size *28, HEIGHT - block_size *12, block_size, f"{ground_path}/blank.png")
 
         # Chão camada 13
-            , Block(0, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile68.png")
-            , Block(block_size, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *2, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *3, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
-            , Block(block_size *4, c.HEIGHT - block_size *13, block_size, f"{ground_path}/tile63.png")
+            , Block(0, HEIGHT - block_size *13, block_size, f"{ground_path}/tile68.png")
+            , Block(block_size, HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *2, HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *3, HEIGHT - block_size *13, block_size, f"{ground_path}/tile72.png")
+            , Block(block_size *4, HEIGHT - block_size *13, block_size, f"{ground_path}/tile63.png")
         ]
 
 
@@ -848,7 +913,7 @@ def main(window):
 
     run = True
     while run:
-        clock.tick(c.FPS)
+        clock.tick(FPS)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -866,7 +931,7 @@ def main(window):
         if player.is_dead:
             game.show_end_screen(window, True)  
                     
-        player.loop(c.FPS)
+        player.loop(FPS)
         handle_move(player, objects)
         game.handle_cat_collision(player, cats)
 
@@ -878,12 +943,12 @@ def main(window):
         if game.check_end_game(window):  # Se o jogo acabou, exibe a tela de fim de jogo
             break
 
-        if (player.rect.right - offset_x >= c.WIDTH - scroll_area_width and player.x_vel > 0) or (
-                player.rect.left - offset_x <= c.WIDTH - scroll_area_width and player.x_vel < 0):
+        if (player.rect.right - offset_x >= WIDTH - scroll_area_width and player.x_vel > 0) or (
+                player.rect.left - offset_x <= WIDTH - scroll_area_width and player.x_vel < 0):
             offset_x += player.x_vel
 
-        if (player.rect.top - offset_y >= c.HEIGHT - scroll_area_hight and player.y_vel > 0) or (
-                player.rect.bottom- offset_y <= c.HEIGHT - scroll_area_hight and player.y_vel < 0):
+        if (player.rect.top - offset_y >= HEIGHT - scroll_area_hight and player.y_vel > 0) or (
+                player.rect.bottom- offset_y <= HEIGHT - scroll_area_hight and player.y_vel < 0):
             offset_y += player.y_vel
 
     pygame.quit()
